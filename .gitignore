@@ -1,0 +1,17 @@
+__pycache__/
+.Python
+env/
+
+# visual studio code
+.DStore
+.DS_Store
+.idea
+
+# virtualenv
+.venv
+venv/
+venv3.6
+ENV/
+
+# pyenv
+.python-version
