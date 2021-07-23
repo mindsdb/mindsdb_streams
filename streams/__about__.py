@@ -1,4 +1,4 @@
-__title__ = "MindsDB"
+__title__ = "mindsdb-streams"
 __package_name__ = 'mindsdb_streams'
 __version__ = '0.0.1'
 __description__ = "MindsDB Streams, provide streams capabilities to mindsdb native python library"
