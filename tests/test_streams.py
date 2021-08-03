@@ -37,9 +37,9 @@ def run_mindsdb():
 
 
 class StreamTest(unittest.TestCase):
-    # @classmethod
-    # def setUpClass(cls):
-    #     run_mindsdb()
+    @classmethod
+    def setUpClass(cls):
+        run_mindsdb()
 
 
     def upload_ds(self, name):
@@ -128,6 +128,7 @@ class StreamTest(unittest.TestCase):
 
         controller_thread.start()
         time.sleep(2)
+        controller.stop_event.set()
 
         self.assertEqual(len(list(stream_out.read())), 2)
 
@@ -140,13 +141,9 @@ class StreamTest(unittest.TestCase):
         controller_thread = threading.Thread(target=controller.work, args=())
 
         controller_thread.start()
-        for x in range(210, 220):
+        for x in range(210, 221):
             stream_in.write({'x1': x, 'x2': 2*x, 'order': x, 'group': "A"})
 
-        time.sleep(2)
-
-        for x in range(220, 221):
-            stream_in.write({'x1': x, 'x2': 2*x, 'order': x, 'group': "A"})
 
         time.sleep(2)
         controller.stop_event.set()

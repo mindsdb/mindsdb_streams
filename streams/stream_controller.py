@@ -114,10 +114,12 @@ class StreamController:
                                 # WARNING: assuming wd[ob] is numeric
                                 key=lambda wd: tuple(wd[ob] for ob in order_by)
                             )]
-                            res_list = self._predict(when_data=cache[gb_value][-window:])
-                            log.info("writing %s as prediction result to stream_out", res_list[-1])
-                            self.stream_out.write(res_list[-1])
-                            cache[gb_value] = cache[gb_value][1 - window:]
+                            while len(cache[gb_value]) >= window:
+
+                                res_list = self._predict(when_data=cache[gb_value][:window])
+                                log.info("writing %s as prediction result to stream_out", res_list[-1])
+                                self.stream_out.write(res_list[-1])
+                                cache[gb_value] = cache[gb_value][1:]
 
     def _predict(self, when_data):
         params = {"when": when_data}
