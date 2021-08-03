@@ -1,5 +1,6 @@
 import sys
 import os
+from threading import Event
 import requests
 from .utils import log, Cache
 
@@ -18,9 +19,12 @@ class StreamController:
             log.error("unable to get prediction - predictor %s doesn't exists", self.predictor)
             sys.exit(1)
         self.ts_settings = self._get_ts_settings()
+        self.stop_event = Event()
 
     def work(self):
-        is_timeseries = self.ts_settings.get('is_timeseries', False)
+        # is_timeseries = self.ts_settings.get('is_timeseries', False)
+        is_timeseries = self.ts_settings.get('user_settings', {}).get('is_timeseries', False)
+        log.info(f"is_timeseries: {is_timeseries}")
         predict_func = self._make_ts_predictions if is_timeseries else self._make_predictions
         predict_func()
 
@@ -39,12 +43,12 @@ class StreamController:
 
 
     def _make_ts_predictions(self):
-        window = self.ts_settings['window']
+        window = self.ts_settings['user_settings']['window']
 
-        order_by = self.ts_settings['order_by']
+        order_by = self.ts_settings['user_settings']['order_by']
         order_by = [order_by] if isinstance(order_by, str) else order_by
 
-        group_by = self.ts_settings.get('group_by', None)
+        group_by = self.ts_settings['user_settings'].get('group_by', None)
         group_by = [group_by] if isinstance(group_by, str) else group_by
 
         cache = Cache(f'{self.predictor}_cache')
@@ -53,7 +57,7 @@ class StreamController:
             if '' not in cache:
                 cache[''] = []
 
-            while True:
+            while not self.stop_event.wait(0.5):
                 with cache:
                     for when_data in self.stream_in.read():
                         for ob in order_by:
@@ -75,8 +79,9 @@ class StreamController:
                         cache[''] = cache[''][1 - window:]
         else:
 
-            while True:
+            while not self.stop_event.wait(0.5):
                 for when_data in self.stream_in.read():
+                    log.info("received input data: %s", when_data)
                     for ob in order_by:
                         if ob not in when_data:
                             raise Exception(f'when_data doesn\'t contain order_by[{ob}]')
@@ -109,7 +114,8 @@ class StreamController:
                                 # WARNING: assuming wd[ob] is numeric
                                 key=lambda wd: tuple(wd[ob] for ob in order_by)
                             )]
-                            res_list = self._predict(when_data=cache[''][-window:])
+                            res_list = self._predict(when_data=cache[gb_value][-window:])
+                            log.info("writing %s as prediction result to stream_out", res_list[-1])
                             self.stream_out.write(res_list[-1])
                             cache[gb_value] = cache[gb_value][1 - window:]
 

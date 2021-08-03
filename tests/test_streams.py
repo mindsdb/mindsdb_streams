@@ -15,6 +15,9 @@ from streams import TestStream, StreamController
 HTTP_API_ROOT = "http://127.0.0.1:47334/api"
 DS_NAME = 'test_datasource'
 DEFAULT_PREDICTOR = "stream_predictor"
+TS_PREDICTOR = "stream_ts_predictor"
+
+
 def stop_mindsdb(ppid):
     pprocess = psutil.Process(ppid)
     pids = [x.pid for x in pprocess.children(recursive=True)]
@@ -112,8 +115,8 @@ class StreamTest(unittest.TestCase):
 
     def test_2_predictions_through_controller(self):
         print(f"\nExecuting {self._testMethodName}")
-        # self.upload_ds(DS_NAME)
-        # self.train_predictor(DS_NAME, DEFAULT_PREDICTOR)
+        self.upload_ds(DS_NAME)
+        self.train_predictor(DS_NAME, DEFAULT_PREDICTOR)
         stream_in = TestStream(f'{self._testMethodName}_in')
         stream_out = TestStream(f'{self._testMethodName}_out')
         controller = StreamController(DEFAULT_PREDICTOR, stream_in, stream_out)
@@ -128,6 +131,31 @@ class StreamTest(unittest.TestCase):
 
         self.assertEqual(len(list(stream_out.read())), 2)
 
+    def test_3_ts_predictions_through_controller(self):
+        print(f"\nExecuting {self._testMethodName}")
+        self.train_ts_predictor(DS_NAME, TS_PREDICTOR)
+        stream_in = TestStream(f'{self._testMethodName}_in')
+        stream_out = TestStream(f'{self._testMethodName}_out')
+        controller = StreamController(TS_PREDICTOR, stream_in, stream_out)
+        controller_thread = threading.Thread(target=controller.work, args=())
+
+        controller_thread.start()
+        for x in range(210, 220):
+            stream_in.write({'x1': x, 'x2': 2*x, 'order': x, 'group': "A"})
+
+        time.sleep(2)
+
+        for x in range(220, 221):
+            stream_in.write({'x1': x, 'x2': 2*x, 'order': x, 'group': "A"})
+
+        time.sleep(2)
+        controller.stop_event.set()
+        res = list(stream_out.read())
+        for item in res:
+            print(item)
+            print('-' * 10)
+        self.assertEqual(len(res), 2)
+        # self.assertEqual(len(list(stream_out.read())), 2)
 
 
 if __name__ == "__main__":

@@ -4,23 +4,24 @@ import json
 from abc import ABC, abstractmethod
 
 import walrus
-# from mindsdb.utilities.config import Config
-
-# CONFIG = Config()
 
 
 class BaseCache(ABC):
+
+    redis_cache_connection = os.getenv("REDIS_CACHE", None)
+
     def __init__(self):
-        self.config = {}
-        redis_cache_connection = os.getenv("REDIS_CACHE", None)
-        if redis_cache_connection is not None:
+        self.config = {'cache': {}, 'paths': {}}
+        self.redis_cache_connection = os.getenv("REDIS_CACHE", None)
+
+        if self.redis_cache_connection is not None:
             self.config['cache']['type'] = 'redis'
-            self.config['cache']['params'] = redis_cache_connection if isinstance(redis_cache_connection, dict) else json.loads(redis_cache_connection)
+            self.config['cache']['params'] = self.redis_cache_connection if isinstance(self.redis_cache_connection, dict) else json.loads(self.redis_cache_connection)
         else:
             self.config['cache']['type'] = 'shelve'
             cache_dir = os.path.join(os.getenv('HOME', '/home/ubuntu'), 'cache')
             os.makedirs(cache_dir, exist_ok=True)
-            self.config['paths']['cache'] = cache_dir 
+            self.config['paths']['cache'] = cache_dir
     @abstractmethod
     def delete(self):
         pass
@@ -126,7 +127,4 @@ class RedisCache(BaseCache):
         pass
 
 
-try:
-    Cache = RedisCache
-except Exception:
-    Cache = LocalCache
+Cache = RedisCache if BaseCache.redis_cache_connection else LocalCache
