@@ -6,9 +6,10 @@ from .utils import log, Cache
 
 
 class StreamController:
-    def __init__(self, predictor, stream_in, stream_out):
+    def __init__(self, predictor, stream_in, stream_out, stream_anomaly=None):
         self.stream_in = stream_in
         self.stream_out = stream_out
+        self.stream_anomaly = stream_anomaly
         self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
         self.company_id = os.getenv('COMPANY_ID')
         self.predictor = predictor
@@ -37,10 +38,23 @@ class StreamController:
             except Exception as e:
                 log.error("prediction error: %s", e)
             try:
-                self.stream_out.write(prediction)
+
+                prediction = prediction if isinstance(prediction, list) else [prediction, ]
+                for item in prediction:
+                    if self.stream_anomaly is not None and self._is_anomaly(item):
+                        self.stream_anomaly.write(item)
+                    else:
+                        self.stream_out.write(item)
             except Exception as e:
                 log.error("writing error: %s", e)
 
+
+    @staticmethod
+    def _is_anomaly(res):
+        for k in res:
+            if k.endswith('anomaly') and res[k] is not None:
+                return True
+        return False
 
     def _make_ts_predictions(self):
         window = self.ts_settings['user_settings']['window']
@@ -60,6 +74,7 @@ class StreamController:
             while not self.stop_event.wait(0.5):
                 with cache:
                     for when_data in self.stream_in.read():
+                        log.debug("received input data: %s", when_data)
                         for ob in order_by:
                             if ob not in when_data:
                                 raise Exception(f'when_data doesn\'t contain order_by[{ob}]')
@@ -75,13 +90,18 @@ class StreamController:
                             key=lambda wd: tuple(wd[ob] for ob in order_by)
                         )]
                         res_list = self._predict(when_data=cache[''][-window:])
-                        self.stream_out.write(res_list[-1])
+                        if self.stream_anomaly is not None and self._is_anomaly(res_list[-1]):
+                            log.debug("writing %s as prediction result to anomaly stream", res_list[-1])
+                            self.stream_anomaly.write(res_list[-1])
+                        else:
+                            log.debug("writing %s as prediction result to output stream", res_list[-1])
+                            self.stream_out.write(res_list[-1])
                         cache[''] = cache[''][1 - window:]
         else:
 
             while not self.stop_event.wait(0.5):
                 for when_data in self.stream_in.read():
-                    log.info("received input data: %s", when_data)
+                    log.debug("received input data: %s", when_data)
                     for ob in order_by:
                         if ob not in when_data:
                             raise Exception(f'when_data doesn\'t contain order_by[{ob}]')
@@ -117,8 +137,12 @@ class StreamController:
                             while len(cache[gb_value]) >= window:
 
                                 res_list = self._predict(when_data=cache[gb_value][:window])
-                                log.info("writing %s as prediction result to stream_out", res_list[-1])
-                                self.stream_out.write(res_list[-1])
+                                if self.stream_anomaly is not None and self._is_anomaly(res_list[-1]):
+                                    log.debug("writing %s as prediction result to anomaly stream", res_list[-1])
+                                    self.stream_anomaly.write(res_list[-1])
+                                else:
+                                    log.debug("writing %s as prediction result to output stream", res_list[-1])
+                                    self.stream_out.write(res_list[-1])
                                 cache[gb_value] = cache[gb_value][1:]
 
     def _predict(self, when_data):
