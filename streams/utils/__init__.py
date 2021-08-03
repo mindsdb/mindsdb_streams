@@ -9,3 +9,5 @@ if log.level == logging.NOTSET:
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     log.addHandler(console_handler)
+
+from .cache import Cache
