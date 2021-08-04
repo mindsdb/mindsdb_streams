@@ -23,7 +23,6 @@ class StreamController:
         self.stop_event = Event()
 
     def work(self):
-        # is_timeseries = self.ts_settings.get('is_timeseries', False)
         is_timeseries = self.ts_settings.get('user_settings', {}).get('is_timeseries', False)
         log.info(f"is_timeseries: {is_timeseries}")
         predict_func = self._make_ts_predictions if is_timeseries else self._make_predictions
@@ -31,10 +30,10 @@ class StreamController:
 
     def _make_predictions(self):
         for data in self.stream_in.read():
-            log.info("received input data: %s", data)
+            log.debug("received input data: %s", data)
             try:
                 prediction = self._predict(data)
-                log.info("get predictions for %s: %s", data, prediction)
+                log.debug("get predictions for %s: %s", data, prediction)
             except Exception as e:
                 log.error("prediction error: %s", e)
             try:
@@ -52,7 +51,7 @@ class StreamController:
     @staticmethod
     def _is_anomaly(res):
         for k in res:
-            if k.endswith('anomaly') and res[k] is not None:
+            if k.endswith('_anomaly') and res[k] is not None:
                 return True
         return False
 
@@ -146,7 +145,7 @@ class StreamController:
                                 cache[gb_value] = cache[gb_value][1:]
 
     def _predict(self, when_data):
-        params = {"when": when_data}
+        params = {"when": when_data, 'format_flag': 'dict'}
         res = requests.post(self.predict_url, json=params)
         if res.status_code != requests.status_codes.codes.ok:
             raise Exception(f"unable to get prediction for {when_data}: {res.text}")

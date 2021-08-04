@@ -147,12 +147,7 @@ class StreamTest(unittest.TestCase):
 
         time.sleep(2)
         controller.stop_event.set()
-        res = list(stream_out.read())
-        for item in res:
-            print(item)
-            print('-' * 10)
-        self.assertEqual(len(res), 2)
-        # self.assertEqual(len(list(stream_out.read())), 2)
+        self.assertEqual(len(list(stream_out.read())), 2)
 
 
 if __name__ == "__main__":
