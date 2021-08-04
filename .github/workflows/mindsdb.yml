@@ -27,7 +27,7 @@ jobs:
           echo "==========Running with mindsdb version==============="
           python -m pip show mindsdb
           echo "====================================================="
-          python tests/test_streams.py
+          python -m tests.test_streams
       env:
         CHECK_FOR_UPDATES: False
         LOGLEVEL: 'DEBUG'
