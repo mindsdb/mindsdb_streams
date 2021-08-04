@@ -29,23 +29,24 @@ class StreamController:
         predict_func()
 
     def _make_predictions(self):
-        for data in self.stream_in.read():
-            log.debug("received input data: %s", data)
-            try:
-                prediction = self._predict(data)
-                log.debug("get predictions for %s: %s", data, prediction)
-            except Exception as e:
-                log.error("prediction error: %s", e)
-            try:
+        while not self.stop_event.wait(0.5):
+            for data in self.stream_in.read():
+                log.debug("received input data: %s", data)
+                try:
+                    prediction = self._predict(data)
+                    log.debug("get predictions for %s: %s", data, prediction)
+                except Exception as e:
+                    log.error("prediction error: %s", e)
+                try:
 
-                prediction = prediction if isinstance(prediction, list) else [prediction, ]
-                for item in prediction:
-                    if self.stream_anomaly is not None and self._is_anomaly(item):
-                        self.stream_anomaly.write(item)
-                    else:
-                        self.stream_out.write(item)
-            except Exception as e:
-                log.error("writing error: %s", e)
+                    prediction = prediction if isinstance(prediction, list) else [prediction, ]
+                    for item in prediction:
+                        if self.stream_anomaly is not None and self._is_anomaly(item):
+                            self.stream_anomaly.write(item)
+                        else:
+                            self.stream_out.write(item)
+                except Exception as e:
+                    log.error("writing error: %s", e)
 
 
     @staticmethod
