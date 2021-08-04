@@ -25,7 +25,7 @@ jobs:
     - name: Running tests
       run: |
           echo "==========Running with mindsdb version==============="
-          python pip show mindsdb
+          python -m pip show mindsdb
           echo "====================================================="
           python tests/test_streams.py
       env:
