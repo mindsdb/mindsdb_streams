@@ -17,7 +17,9 @@ class StreamController:
         self.company_id = os.getenv('COMPANY_ID') or None
         log.info("environment variables: MINDSDB_URL=%s\tCOMPANY_ID=%s",
                     self.mindsdb_url, self.company_id)
-        self.headers = {'Content-Type': 'application/json', 'company-id': self.company_id}
+        self.headers = {'Content-Type': 'application/json'}
+        if self.company_id is not None:
+            self.headers['company-id'] = self.company_id
         self.predictors_url = "{}/api/predictors/".format(self.mindsdb_url)
         self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
         self.predictor_url = self.predictors_url + self.predictor
