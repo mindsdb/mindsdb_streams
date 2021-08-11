@@ -10,9 +10,14 @@ class StreamController:
         self.stream_in = stream_in
         self.stream_out = stream_out
         self.stream_anomaly = stream_anomaly
-        self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
-        self.company_id = os.getenv('COMPANY_ID')
         self.predictor = predictor
+        log.info("creating controller params: predictor=%s, stream_in=%s, stream_out=%s, stream_anomaly=%s",
+                    self.predictor, self.stream_in. self.stream_out, self.stream_anomaly)
+        self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
+        self.company_id = os.getenv('COMPANY_ID') or None
+        log.info("environment variables: MINDSDB_URL=%s\tCOMPANY_ID=%s",
+                    self.mindsdb_url, self.company_id)
+        self.headers = {'Content-Type': 'application/json', 'company-id': self.company_id}
         self.predictors_url = "{}/api/predictors/".format(self.mindsdb_url)
         self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
         self.predictor_url = self.predictors_url + self.predictor
@@ -91,10 +96,12 @@ class StreamController:
                         )]
                         res_list = self._predict(when_data=cache[''][-window:])
                         if self.stream_anomaly is not None and self._is_anomaly(res_list[-1]):
-                            log.debug("writing %s as prediction result to anomaly stream", res_list[-1])
+                            log.debug("writing %s as prediction result to anomaly stream",
+                                        res_list[-1])
                             self.stream_anomaly.write(res_list[-1])
                         else:
-                            log.debug("writing %s as prediction result to output stream", res_list[-1])
+                            log.debug("writing %s as prediction result to output stream",
+                                        res_list[-1])
                             self.stream_out.write(res_list[-1])
                         cache[''] = cache[''][1 - window:]
         else:
@@ -138,26 +145,28 @@ class StreamController:
 
                                 res_list = self._predict(when_data=cache[gb_value][:window])
                                 if self.stream_anomaly is not None and self._is_anomaly(res_list[-1]):
-                                    log.debug("writing %s as prediction result to anomaly stream", res_list[-1])
+                                    log.debug("writing %s as prediction result to anomaly stream",
+                                                res_list[-1])
                                     self.stream_anomaly.write(res_list[-1])
                                 else:
-                                    log.debug("writing %s as prediction result to output stream", res_list[-1])
+                                    log.debug("writing %s as prediction result to output stream",
+                                                res_list[-1])
                                     self.stream_out.write(res_list[-1])
                                 cache[gb_value] = cache[gb_value][1:]
 
     def _predict(self, when_data):
         params = {"when": when_data, 'format_flag': 'dict'}
-        res = requests.post(self.predict_url, json=params)
+        res = requests.post(self.predict_url, json=params, headers=self.headers)
         if res.status_code != requests.status_codes.codes.ok:
             raise Exception(f"unable to get prediction for {when_data}: {res.text}")
         return res.json()
 
     def _is_predictor_exist(self):
-        res = requests.get(self.predictor_url)
+        res = requests.get(self.predictor_url, headers=self.headers)
         if res.status_code != requests.status_codes.codes.ok:
             return False
         return True
 
     def _get_ts_settings(self):
-        res = requests.get(self.predictor_url)
+        res = requests.get(self.predictor_url, headers=self.headers)
         return res.json()['timeseries'] if res.status_code == requests.status_codes.codes.ok else {}
