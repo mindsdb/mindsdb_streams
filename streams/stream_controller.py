@@ -12,12 +12,14 @@ class StreamController:
         self.stream_anomaly = stream_anomaly
         self.predictor = predictor
         log.info("creating controller params: predictor=%s, stream_in=%s, stream_out=%s, stream_anomaly=%s",
-                    self.predictor, self.stream_in. self.stream_out, self.stream_anomaly)
+                    self.predictor, self.stream_in, self.stream_out, self.stream_anomaly)
         self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
         self.company_id = os.getenv('COMPANY_ID') or None
         log.info("environment variables: MINDSDB_URL=%s\tCOMPANY_ID=%s",
                     self.mindsdb_url, self.company_id)
-        self.headers = {'Content-Type': 'application/json', 'company-id': self.company_id}
+        self.headers = {'Content-Type': 'application/json'}
+        if self.company_id is not None:
+            self.headers['company-id'] = self.company_id
         self.predictors_url = "{}/api/predictors/".format(self.mindsdb_url)
         self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
         self.predictor_url = self.predictors_url + self.predictor
