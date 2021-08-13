@@ -96,16 +96,17 @@ class StreamController:
                             # WARNING: assuming wd[ob] is numeric
                             key=lambda wd: tuple(wd[ob] for ob in order_by)
                         )]
-                        res_list = self._predict(when_data=cache[''][-window:])
-                        if self.stream_anomaly is not None and self._is_anomaly(res_list[-1]):
-                            log.debug("writing %s as prediction result to anomaly stream",
-                                        res_list[-1])
-                            self.stream_anomaly.write(res_list[-1])
-                        else:
-                            log.debug("writing %s as prediction result to output stream",
-                                        res_list[-1])
-                            self.stream_out.write(res_list[-1])
-                        cache[''] = cache[''][1 - window:]
+                        while len(cache['']) >= window:
+                            res_list = self._predict(when_data=cache[''][:window])
+                            if self.stream_anomaly is not None and self._is_anomaly(res_list[-1]):
+                                log.debug("writing %s as prediction result to anomaly stream",
+                                            res_list[-1])
+                                self.stream_anomaly.write(res_list[-1])
+                            else:
+                                log.debug("writing %s as prediction result to output stream",
+                                            res_list[-1])
+                                self.stream_out.write(res_list[-1])
+                            cache[''] = cache[''][1:]
         else:
 
             while not self.stop_event.wait(0.5):
