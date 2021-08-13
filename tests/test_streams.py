@@ -76,7 +76,17 @@ class StreamTest(unittest.TestCase):
         res = requests.put(url, json=params)
         res.raise_for_status()
 
-    def train_ts_predictor(self, ds_name, predictor_name):
+    def train_ts_predictor(self, ds_name, predictor_name, with_gb=True):
+        ts_settings = {
+            "order_by": ["order"],
+            "nr_predictions": 1,
+            "use_previous_target": True,
+            "window": 10}
+
+        if with_gb:
+            ts_settings["group_by"] = ["group"]
+        else:
+            ts_settings["group_by"] = []
         params = {
             'data_source_name': ds_name,
             'to_predict': 'y',
@@ -84,13 +94,7 @@ class StreamTest(unittest.TestCase):
                 'use_gpu': False,
                 'join_learn_process': True,
                 'ignore_columns': None,
-                'timeseries_settings': {
-                    "order_by": ["order"],
-                    "group_by": ["group"],
-                    "nr_predictions": 1,
-                    "use_previous_target": True,
-                    "window": 10
-                },
+                'timeseries_settings': ts_settings,
             }
         }
         url = f'{HTTP_API_ROOT}/predictors/{predictor_name}'
@@ -143,6 +147,24 @@ class StreamTest(unittest.TestCase):
         controller_thread.start()
         for x in range(210, 221):
             stream_in.write({'x1': x, 'x2': 2*x, 'order': x, 'group': "A"})
+
+
+        time.sleep(2)
+        controller.stop_event.set()
+        self.assertEqual(len(list(stream_out.read())), 2)
+
+    def test_4_ts_predictions_through_controller_no_group(self):
+        print(f"\nExecuting {self._testMethodName}")
+        PREDICTOR_NAME = TS_PREDICTOR + "_no_group"
+        self.train_ts_predictor(DS_NAME, PREDICTOR_NAME, with_gb=False)
+        stream_in = TestStream(f'{self._testMethodName}_in')
+        stream_out = TestStream(f'{self._testMethodName}_out')
+        controller = StreamController(PREDICTOR_NAME, stream_in, stream_out)
+        controller_thread = threading.Thread(target=controller.work, args=())
+
+        controller_thread.start()
+        for x in range(210, 221):
+            stream_in.write({'x1': x, 'x2': 2*x, 'order': x})
 
 
         time.sleep(2)
