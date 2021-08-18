@@ -16,6 +16,7 @@ parser.add_argument('type', type=str.lower, choices=['kafka', 'redis'])
 if __name__ == '__main__':
     for i, v in enumerate(sys.argv):
         print(f"{i}:\t{v}")
+    sys.stdout.flush()
     args = parser.parse_args()
     connection_info = json.loads(args.connection_info)
 
