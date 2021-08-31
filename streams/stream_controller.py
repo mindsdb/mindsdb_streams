@@ -30,7 +30,7 @@ class StreamController:
         self.stop_event = Event()
 
     def work(self):
-        is_timeseries = self.ts_settings.get('user_settings', {}).get('is_timeseries', False)
+        is_timeseries = self.ts_settings.get('is_timeseries', False)
         log.info(f"is_timeseries: {is_timeseries}")
         predict_func = self._make_ts_predictions if is_timeseries else self._make_predictions
         predict_func()
@@ -64,12 +64,12 @@ class StreamController:
         return False
 
     def _make_ts_predictions(self):
-        window = self.ts_settings['user_settings']['window']
+        window = self.ts_settings['window']
 
-        order_by = self.ts_settings['user_settings']['order_by']
+        order_by = self.ts_settings['order_by']
         order_by = [order_by] if isinstance(order_by, str) else order_by
 
-        group_by = self.ts_settings['user_settings'].get('group_by', None)
+        group_by = self.ts_settings.get('group_by', None)
         group_by = [group_by] if isinstance(group_by, str) else group_by
 
         cache = Cache(f'{self.predictor}_cache')
@@ -136,4 +136,9 @@ class StreamController:
 
     def _get_ts_settings(self):
         res = requests.get(self.predictor_url, headers=self.headers)
-        return res.json()['timeseries'] if res.status_code == requests.status_codes.codes.ok else {}
+        try:
+            ts_settings = res.json()['problem_definition']['timeseries_settings']
+        except KeyError as e:
+            log.error("api error: unable to get timeseries settings for %s url - %s", self.predictor_url, e)
+            ts_settings = {}
+        return ts_settings if res.status_code == requests.status_codes.codes.ok else {}
