@@ -1,25 +1,45 @@
 import sys
 import os
-from threading import Event
+import time
+import traceback
+from threading import Event, Thread
+from tempfile import NamedTemporaryFile
 import requests
+import pandas as pd
 from .utils import log, Cache
 
-
-class StreamController:
-    def __init__(self, predictor, stream_in, stream_out, stream_anomaly=None):
+class BaseController:
+    def init(self, name, predictor, stream_in, stream_out):
+        self.name = name
         self.stream_in = stream_in
         self.stream_out = stream_out
-        self.stream_anomaly = stream_anomaly
         self.predictor = predictor
-        log.info("creating controller params: predictor=%s, stream_in=%s, stream_out=%s, stream_anomaly=%s",
-                    self.predictor, self.stream_in, self.stream_out, self.stream_anomaly)
         self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
-        self.company_id = os.getenv('COMPANY_ID') or None
+        self.company_id = os.environ.get('MINDSDB_COMPANY_ID') or os.getenv('COMPANY_ID') or None
         log.info("environment variables: MINDSDB_URL=%s\tCOMPANY_ID=%s",
                     self.mindsdb_url, self.company_id)
         self.headers = {'Content-Type': 'application/json'}
         if self.company_id is not None:
             self.headers['company-id'] = self.company_id
+        self.mindsdb_api_root = self.mindsdb_url + "/api"
+        self.predictors_url = "{}/predictors/".format(self.mindsdb_api_root)
+        self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
+        self.predictor_url = self.predictors_url + self.predictor
+
+        self.stop_event = Event()
+
+    def _is_predictor_exist(self):
+        res = requests.get(self.predictor_url, headers=self.headers)
+        if res.status_code != requests.status_codes.codes.ok:
+            return False
+        return True
+
+class StreamController(BaseController):
+    def __init__(self, name, predictor, stream_in, stream_out, stream_anomaly=None):
+        super().__init__(name, predictor, stream_in, stream_out)
+        self.stream_anomaly = stream_anomaly
+        log.info("creating controller params: predictor=%s, stream_in=%s, stream_out=%s, stream_anomaly=%s",
+                    self.predictor, self.stream_in, self.stream_out, self.stream_anomaly)
         self.predictors_url = "{}/api/predictors/".format(self.mindsdb_url)
         self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
         self.predictor_url = self.predictors_url + self.predictor
@@ -27,7 +47,6 @@ class StreamController:
             log.error("unable to get prediction - predictor %s doesn't exists", self.predictor)
             sys.exit(1)
         self.ts_settings = self._get_ts_settings()
-        self.stop_event = Event()
 
     def work(self):
         is_timeseries = self.ts_settings.get('is_timeseries', False)
@@ -128,12 +147,6 @@ class StreamController:
             raise Exception(f"unable to get prediction for {when_data}: {res.text}")
         return res.json()
 
-    def _is_predictor_exist(self):
-        res = requests.get(self.predictor_url, headers=self.headers)
-        if res.status_code != requests.status_codes.codes.ok:
-            return False
-        return True
-
     def _get_ts_settings(self):
         res = requests.get(self.predictor_url, headers=self.headers)
         try:
@@ -142,3 +155,90 @@ class StreamController:
             log.error("api error: unable to get timeseries settings for %s url - %s", self.predictor_url, e)
             ts_settings = {}
         return ts_settings if res.status_code == requests.status_codes.codes.ok else {}
+
+
+class StreamLearningController(BaseController):
+    def __init__(self, name, predictor, learning_params, stream_in, learning_threshold, stream_out, in_thread=False):
+        super().__init__(name, predictor, stream_in, stream_out)
+        self.learning_params = learning_params
+        self.learning_threshold = learning_threshold
+        self.learning_data = []
+
+        self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
+        # self.mindsdb_url = f"http://{self.config['api']['http']['host']}:{self.config['api']['http']['port']}"
+        self.training_ds_name = self.predictor + "_training_ds"
+
+
+        # for consistency only
+        self.stop_event = Event()
+
+        if in_thread:
+            self.thread = Thread(target=StreamLearningController._learn_model, args=(self,))
+
+            self.thread.start()
+
+    def work(self):
+        self._learn_model()
+
+    def _upload_ds(self, df):
+        with NamedTemporaryFile(mode='w+', newline='', delete=False) as f:
+            df.to_csv(f, index=False)
+            f.flush()
+            url = f'{self.mindsdb_api_root}/datasources/{self.training_ds_name}'
+            data = {
+                "source_type": (None, 'file'),
+                "file": (f.name, f, 'text/csv'),
+                "source": (None, f.name.split('/')[-1]),
+                "name": (None, self.training_ds_name)
+            }
+            res = requests.put(url, files=data)
+            res.raise_for_status()
+
+    def _collect_training_data(self):
+        threshold = time.time() + self.learning_threshold
+        while time.time() < threshold:
+            self.learning_data.extend(self.stream_in.read())
+            time.sleep(0.2)
+        return pd.DataFrame.from_records(self.learning_data)
+
+    def _cleanup(self):
+        delete_url = self.mindsdb_api_root + "/stream/" + self.name
+        requests.delete(delete_url)
+
+    def _learn_model(self):
+        msg = {"action": "training", "predictor": self.predictor,
+                "status": "", "details": ""}
+
+        try:
+            if self._is_predictor_exist():
+                predictor_name = f"TMP_{self.predictor}_TMP"
+            else:
+                predictor_name = self.predictor
+
+            df = self._collect_training_data()
+            self._upload_ds(df)
+            self.learning_params['data_source_name'] = self.training_ds_name
+            if 'kwargs' not in self.learning_params:
+                self.learning_params['kwargs'] = {}
+            self.learning_params['kwargs']['join_learn_process'] = True
+            url = f'{self.mindsdb_api_root}/predictors/{predictor_name}'
+            res = requests.put(url, json=self.learning_params)
+            res.raise_for_status()
+
+            if predictor_name != self.predictor:
+                delete_url = f'{self.mindsdb_api_root}/predictors/{self.predictor}'
+                rename_url = f'{self.mindsdb_api_root}/predictors/{predictor_name}/rename?new_name={self.predictor}'
+                res = requests.delete(delete_url)
+                res.raise_for_status()
+                res = requests.get(rename_url)
+                res.raise_for_status()
+            msg["status"] = "success"
+        except Exception:
+            msg["status"] = "error"
+            msg["details"] = traceback.format_exc()
+        self.stream_out.write(msg)
+
+        # Need to delete its own record from db to mark it as outdated
+        # for integration, which will delete it from 'active threads' after that (local installation)
+        # for pod_manager, which will delete this pod from kubernetes cluster (cloud)
+        self._cleanup()
