@@ -28,3 +28,6 @@ class TestStream(BaseStream):
             os.remove(self.filename)
         except Exception:
             pass
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}: file={self.filename}"

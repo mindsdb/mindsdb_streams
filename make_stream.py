@@ -1,7 +1,7 @@
 import sys
 import json
 import argparse
-from streams import KafkaStream, RedisStream, StreamController
+from mindsdb_streams import KafkaStream, RedisStream, StreamController
 
 
 parser = argparse.ArgumentParser()
@@ -21,9 +21,9 @@ if __name__ == '__main__':
     connection_info = json.loads(args.connection_info)
 
     stream_class = RedisStream if args.type == 'redis' else KafkaStream
-    stream_out = stream_class(args.output_stream, **connection_info)
-    stream_in = stream_class(args.input_stream, **connection_info)
-    stream_anomaly = stream_class(args.anomaly_stream, **connection_info) if args.anomaly_stream not in ('', None, 'None', 'none') else None
+    stream_out = stream_class(args.output_stream, connection_info)
+    stream_in = stream_class(args.input_stream, connection_info)
+    stream_anomaly = stream_class(args.anomaly_stream, connection_info) if args.anomaly_stream not in ('', None, 'None', 'none') else None
     controller = StreamController(args.predictor, stream_in, stream_out, stream_anomaly)
 
     controller.work()
