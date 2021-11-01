@@ -158,7 +158,7 @@ class StreamController(BaseController):
 
 
 class StreamLearningController(BaseController):
-    def __init__(self, name, predictor, learning_params, stream_in, learning_threshold, stream_out, in_thread=False):
+    def __init__(self, name, predictor, learning_params, learning_threshold, stream_in, stream_out, in_thread=False):
         super().__init__(name, predictor, stream_in, stream_out)
         self.learning_params = learning_params
         self.learning_threshold = learning_threshold
@@ -202,8 +202,9 @@ class StreamLearningController(BaseController):
         return pd.DataFrame.from_records(self.learning_data)
 
     def _cleanup(self):
-        delete_url = self.mindsdb_api_root + "/stream/" + self.name
-        requests.delete(delete_url)
+        delete_url = self.mindsdb_api_root + "/streams/" + self.name
+        res = requests.delete(delete_url)
+        log.debug("delete '%s' - code: %s, text: %s", delete_url, res.status_code, res.text)
 
     def _learn_model(self):
         msg = {"action": "training", "predictor": self.predictor,
