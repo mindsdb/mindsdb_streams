@@ -11,17 +11,22 @@ class BaseCache(ABC):
     redis_cache_connection = os.getenv("REDIS_CACHE", None)
 
     def __init__(self):
-        self.config = {'cache': {}, 'paths': {}}
-        self.redis_cache_connection = os.getenv("REDIS_CACHE", None)
+        try:
+            from mindsdb.utilities.config import Config
+            self.config = Config()
+        except ImportError:
+            self.config = {'cache': {}, 'paths': {}}
+            self.redis_cache_connection = os.getenv("REDIS_CACHE", None)
 
-        if self.redis_cache_connection is not None:
-            self.config['cache']['type'] = 'redis'
-            self.config['cache']['params'] = self.redis_cache_connection if isinstance(self.redis_cache_connection, dict) else json.loads(self.redis_cache_connection)
-        else:
-            self.config['cache']['type'] = 'shelve'
-            cache_dir = os.path.join(os.getenv('HOME', '/home/ubuntu'), 'cache')
-            os.makedirs(cache_dir, exist_ok=True)
-            self.config['paths']['cache'] = cache_dir
+            if self.redis_cache_connection is not None:
+                self.config['cache']['type'] = 'redis'
+                self.config['cache']['params'] = self.redis_cache_connection if isinstance(self.redis_cache_connection, dict) else json.loads(self.redis_cache_connection)
+            else:
+                self.config['cache']['type'] = 'shelve'
+                cache_dir = os.path.join(os.getenv('HOME', '/home/ubuntu'), 'cache')
+                os.makedirs(cache_dir, exist_ok=True)
+                self.config['paths']['cache'] = cache_dir
+
     @abstractmethod
     def delete(self):
         pass
