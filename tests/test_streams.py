@@ -9,13 +9,16 @@ from subprocess import Popen
 import psutil
 import requests
 import pandas as pd
-from streams import TestStream, StreamController
+from mindsdb_streams import TestStream, StreamController
 
 
 HTTP_API_ROOT = "http://127.0.0.1:47334/api"
 DS_NAME = 'test_datasource'
 DEFAULT_PREDICTOR = "stream_predictor"
 TS_PREDICTOR = "stream_ts_predictor"
+DEFAULT_STREAM_NAME = "FOO"
+TS_STREAM_NAME = DEFAULT_STREAM_NAME + "_TS"
+NO_GROUP_STREAM_NAME = DEFAULT_STREAM_NAME + "_NO_GROUP"
 
 
 def stop_mindsdb(ppid):
@@ -123,7 +126,7 @@ class StreamTest(unittest.TestCase):
         self.train_predictor(DS_NAME, DEFAULT_PREDICTOR)
         stream_in = TestStream(f'{self._testMethodName}_in')
         stream_out = TestStream(f'{self._testMethodName}_out')
-        controller = StreamController(DEFAULT_PREDICTOR, stream_in, stream_out)
+        controller = StreamController(DEFAULT_STREAM_NAME, DEFAULT_PREDICTOR, stream_in, stream_out)
         controller_thread = threading.Thread(target=controller.work, args=())
 
         time.sleep(1)
@@ -141,7 +144,7 @@ class StreamTest(unittest.TestCase):
         self.train_ts_predictor(DS_NAME, TS_PREDICTOR)
         stream_in = TestStream(f'{self._testMethodName}_in')
         stream_out = TestStream(f'{self._testMethodName}_out')
-        controller = StreamController(TS_PREDICTOR, stream_in, stream_out)
+        controller = StreamController(TS_STREAM_NAME, TS_PREDICTOR, stream_in, stream_out)
         controller_thread = threading.Thread(target=controller.work, args=())
 
         controller_thread.start()
@@ -159,7 +162,7 @@ class StreamTest(unittest.TestCase):
         self.train_ts_predictor(DS_NAME, PREDICTOR_NAME, with_gb=False)
         stream_in = TestStream(f'{self._testMethodName}_in')
         stream_out = TestStream(f'{self._testMethodName}_out')
-        controller = StreamController(PREDICTOR_NAME, stream_in, stream_out)
+        controller = StreamController(NO_GROUP_STREAM_NAME, PREDICTOR_NAME, stream_in, stream_out)
         controller_thread = threading.Thread(target=controller.work, args=())
 
         controller_thread.start()
