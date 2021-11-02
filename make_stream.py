@@ -13,9 +13,9 @@ parser.add_argument('output_stream', type=str)
 parser.add_argument('anomaly_stream', type=str)
 parser.add_argument('type', type=str.lower, choices=['kafka', 'redis'])
 parser.add_argument('learning_params', type=str,
-        help="json string with model learning params", default="")
+        help="json string with model learning params")
 parser.add_argument('learning_threshold', type=int,
-        help="timeout for collecting training data", default=0)
+        help="timeout for collecting training data")
 
 
 if __name__ == '__main__':
@@ -45,4 +45,5 @@ if __name__ == '__main__':
                                       stream_out,
                                       stream_anomaly)
 
+    print(f"Created '{controller.__class__.__name__}' controller, stream name - {stream_name}")
     controller.work()
