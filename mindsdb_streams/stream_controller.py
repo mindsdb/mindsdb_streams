@@ -14,7 +14,13 @@ class BaseController:
         self.stream_in = stream_in
         self.stream_out = stream_out
         self.predictor = predictor
-        self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
+
+        try:
+            from mindsdb.utilities.config import Config
+            config = Config()
+            self.mindsdb_url = f"http://{config['api']['http']['host']}:{config['api']['http']['port']}"
+        except (ImportError, KeyError):
+            self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
         self.company_id = os.environ.get('MINDSDB_COMPANY_ID') or os.getenv('COMPANY_ID') or None
         log.info("%s: environment variables: MINDSDB_URL=%s\tCOMPANY_ID=%s",
                     self.name, self.mindsdb_url, self.company_id)
@@ -172,11 +178,7 @@ class StreamLearningController(BaseController):
         self.learning_params = learning_params
         self.learning_threshold = learning_threshold
         self.learning_data = []
-
-        self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
-        # self.mindsdb_url = f"http://{self.config['api']['http']['host']}:{self.config['api']['http']['port']}"
         self.training_ds_name = self.predictor + "_training_ds"
-
 
         # for consistency only
         self.stop_event = Event()
