@@ -9,7 +9,7 @@ from subprocess import Popen
 import psutil
 import requests
 import pandas as pd
-from streams import TestStream, StreamController
+from mindsdb_streams import TestStream, StreamController
 
 
 HTTP_API_ROOT = "http://127.0.0.1:47334/api"
