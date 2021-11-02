@@ -2,7 +2,7 @@ import setuptools
 
 
 about = {}
-with open("streams/__about__.py") as fp:
+with open("mindsdb_streams/__about__.py") as fp:
     exec(fp.read(), about)
 
 
