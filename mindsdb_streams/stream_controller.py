@@ -179,6 +179,8 @@ class StreamLearningController(BaseController):
         self.learning_threshold = learning_threshold
         self.learning_data = []
         self.training_ds_name = self.predictor + "_training_ds"
+        log.info("%s: learning controller params: predictor=%s, learning_params=%s, learning_threshold=%s, stream_in=%s, stream_out=%s",
+                    self.name, self.predictor, self.learning_params, self.learning_threshold, self.stream_in, self.stream_out)
 
         # for consistency only
         self.stop_event = Event()
