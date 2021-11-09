@@ -1,4 +1,3 @@
-import sys
 import os
 import time
 import traceback
@@ -35,10 +34,18 @@ class BaseController:
         self.stop_event = Event()
 
     def _is_predictor_exist(self):
-        res = requests.get(self.predictor_url, headers=self.headers)
-        if res.status_code != requests.status_codes.codes.ok:
-            return False
-        return True
+        max_attempt = 3
+        cur_attempt = 0
+        while cur_attempt < max_attempt:
+            try:
+                res = requests.get(self.predictor_url, headers=self.headers)
+                if res.status_code == requests.status_codes.codes.ok:
+                    return True
+            except Exception as e:
+                log.debug("%s: error getting predictor(%s) info - %s", self.name, self.predictor, e)
+            cur_attempt += 1
+            time.sleep(1)
+        return False
 
 
 class StreamController(BaseController):
@@ -52,8 +59,8 @@ class StreamController(BaseController):
         self.predictor_url = self.predictors_url + self.predictor
         if not self._is_predictor_exist():
             log.error("%s: unable to get prediction - predictor %s doesn't exists", self.name, self.predictor)
-            sys.exit(1)
         self.ts_settings = self._get_ts_settings()
+        log.info("%s: timeseries settings - %s", self.name, self.ts_settings)
 
         if in_thread:
             self.thread = Thread(target=StreamController.work, args=(self,))
@@ -99,7 +106,9 @@ class StreamController(BaseController):
         order_by = self.ts_settings['order_by']
         order_by = [order_by] if isinstance(order_by, str) else order_by
 
-        group_by = self.ts_settings.get('group_by', [])
+        group_by = self.ts_settings.get('group_by', None)
+        if group_by is None:
+            group_by = []
         group_by = [group_by] if isinstance(group_by, str) else group_by
 
         cache = Cache(f'{self.predictor}_cache')
