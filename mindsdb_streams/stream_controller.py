@@ -99,7 +99,7 @@ class StreamController(BaseController):
         order_by = self.ts_settings['order_by']
         order_by = [order_by] if isinstance(order_by, str) else order_by
 
-        group_by = self.ts_settings.get('group_by', None)
+        group_by = self.ts_settings.get('group_by', [])
         group_by = [group_by] if isinstance(group_by, str) else group_by
 
         cache = Cache(f'{self.predictor}_cache')
@@ -114,7 +114,7 @@ class StreamController(BaseController):
                     if gb not in when_data:
                         raise Exception(f'when_data doesn\'t contain group_by[{gb}]')
 
-                gb_value = tuple(when_data[gb] for gb in group_by) if group_by is not None else ''
+                gb_value = tuple(when_data[gb] for gb in group_by) if group_by else ''
 
                 # because cache doesn't work for tuples
                 # (raises Exception: tuple doesn't have "encode" attribute)
