@@ -187,7 +187,9 @@ class StreamLearningController(BaseController):
         self.learning_params = learning_params
         self.learning_threshold = learning_threshold
         self.learning_data = []
-        self.training_ds_name = self.predictor + "_training_ds"
+        self.training_ds_name = "{}_training_ds_{}".format(self.predictor,
+                                                           time.strftime("%Y-%m-%d_%H-%M-%S",
+                                                                         time.gmtime()))
         log.info("%s: learning controller params: predictor=%s, learning_params=%s, learning_threshold=%s, stream_in=%s, stream_out=%s",
                     self.name, self.predictor, self.learning_params, self.learning_threshold, self.stream_in, self.stream_out)
 
@@ -233,7 +235,8 @@ class StreamLearningController(BaseController):
 
         try:
             if self._is_predictor_exist():
-                predictor_name = f"TMP_{self.predictor}_TMP"
+                datetime_suffix = time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime())
+                predictor_name = f"TMP_{self.predictor}_{datetime_suffix}"
             else:
                 predictor_name = self.predictor
 
