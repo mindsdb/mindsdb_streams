@@ -59,4 +59,4 @@ jobs:
       - name: Install mindsdb-streams
         run: pip install mindsdb-streams
       - name: Import mindsdb-streams
-        run: python -c "import mindsdb-streams;print(mindsdb-streams.__version__)"
+        run: python -c "import mindsdb_streams;print(mindsdb_streams.__name__)"
