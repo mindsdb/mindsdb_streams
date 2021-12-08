@@ -2,8 +2,9 @@ name: Build and publish to pypi
 
 on:
   push:
+  pull_request:
     branches:
-      - main
+      - stable
 
 jobs:
   install-dependencies:
@@ -27,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TWINE_USERNAME: __token__
-      TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
     steps:
       - uses: actions/checkout@v2
       - name: build and upload manylinux wheels
