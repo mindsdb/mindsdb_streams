@@ -1,6 +1,6 @@
 __title__ = "mindsdb-streams"
 __package_name__ = 'mindsdb_streams'
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 __description__ = "MindsDB Streams, provide streams capabilities to mindsdb native python library"
 __email__ = "jorge@mindsdb.com"
 __author__ = 'MindsDB Inc'

@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
-with open('requirements.txt') as req_file:
+with open('requirements.txt', 'r') as req_file:
     requirements = req_file.read().splitlines()
 
 setuptools.setup(
