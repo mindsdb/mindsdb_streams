@@ -2,9 +2,8 @@ name: Build and publish to pypi
 
 on:
   push:
-  pull_request:
     branches:
-      - stable
+      - main
 
 jobs:
   install-dependencies:
