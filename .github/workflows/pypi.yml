@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
@@ -42,4 +42,21 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
         python setup.py sdist
-        twine upload dist/*k
+        twine upload dist/*
+
+  test_installation:
+    needs: deploy
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest]
+        python-version: [3.8]
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install mindsdb-streams
+        run: pip install mindsdb-streams
+      - name: Import mindsdb-streams
+        run: python -c "import mindsdb-streams;print(mindsdb-streams.__version__)"
