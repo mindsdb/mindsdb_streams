@@ -7,6 +7,7 @@ import requests
 import pandas as pd
 from .utils import log, Cache
 
+
 class BaseController:
     def __init__(self, name, predictor, stream_in, stream_out):
         self.name = name
@@ -22,7 +23,7 @@ class BaseController:
             self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
         self.company_id = os.environ.get('MINDSDB_COMPANY_ID') or os.getenv('COMPANY_ID') or None
         log.info("%s: environment variables: MINDSDB_URL=%s\tCOMPANY_ID=%s",
-                    self.name, self.mindsdb_url, self.company_id)
+                 self.name, self.mindsdb_url, self.company_id)
         self.headers = {'Content-Type': 'application/json'}
         if self.company_id is not None:
             self.headers['company-id'] = self.company_id
@@ -53,7 +54,7 @@ class StreamController(BaseController):
         super().__init__(name, predictor, stream_in, stream_out)
         self.stream_anomaly = stream_anomaly
         log.info("%s: creating controller params: predictor=%s, stream_in=%s, stream_out=%s, stream_anomaly=%s",
-                    self.name, self.predictor, self.stream_in, self.stream_out, self.stream_anomaly)
+                 self.name, self.predictor, self.stream_in, self.stream_out, self.stream_anomaly)
         self.predictors_url = "{}/api/predictors/".format(self.mindsdb_url)
         self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
         self.predictor_url = self.predictors_url + self.predictor
@@ -91,7 +92,6 @@ class StreamController(BaseController):
                             self.stream_out.write(item)
                 except Exception as e:
                     log.error("%s: writing error - %s", self.name, e)
-
 
     @staticmethod
     def _is_anomaly(res):
@@ -155,11 +155,11 @@ class StreamController(BaseController):
                             res_list = self._predict(when_data=cache[gb_value][:window])
                             if self.stream_anomaly is not None and self._is_anomaly(res_list[-1]):
                                 log.debug("%s: writing '%s' as prediction result to anomaly stream",
-                                            self.name, res_list[-1])
+                                          self.name, res_list[-1])
                                 self.stream_anomaly.write(res_list[-1])
                             else:
                                 log.debug("%s: writing '%s' as prediction result to output stream",
-                                            self.name, res_list[-1])
+                                          self.name, res_list[-1])
                                 self.stream_out.write(res_list[-1])
                             cache[gb_value] = cache[gb_value][1:]
 
@@ -176,7 +176,7 @@ class StreamController(BaseController):
             ts_settings = res.json()['problem_definition']['timeseries_settings']
         except KeyError as e:
             log.error("%s - api error: unable to get timeseries settings for %s url - %s",
-                    self.name, self.predictor_url, e)
+                      self.name, self.predictor_url, e)
             ts_settings = {}
         return ts_settings if res.status_code == requests.status_codes.codes.ok else {}
 
@@ -188,10 +188,10 @@ class StreamLearningController(BaseController):
         self.learning_threshold = learning_threshold
         self.learning_data = []
         self.training_ds_name = "{}_training_ds_{}".format(self.predictor,
-                                                           time.strftime("%Y-%m-%d_%H-%M-%S",
+                                                           time.strftime("%Y_%m_%d_%H_%M_%S",
                                                                          time.gmtime()))
         log.info("%s: learning controller params: predictor=%s, learning_params=%s, learning_threshold=%s, stream_in=%s, stream_out=%s",
-                    self.name, self.predictor, self.learning_params, self.learning_threshold, self.stream_in, self.stream_out)
+                 self.name, self.predictor, self.learning_params, self.learning_threshold, self.stream_in, self.stream_out)
 
         # for consistency only
         self.stop_event = Event()
@@ -203,16 +203,13 @@ class StreamLearningController(BaseController):
     def work(self):
         self._learn_model()
 
-    def _upload_ds(self, df):
+    def _upload_file(self, df):
         with NamedTemporaryFile(mode='w+', newline='', delete=False) as f:
             df.to_csv(f, index=False)
             f.flush()
-            url = f'{self.mindsdb_api_root}/datasources/{self.training_ds_name}'
+            url = f'{self.mindsdb_api_root}/files/{self.training_ds_name}'
             data = {
-                "source_type": (None, 'file'),
-                "file": (f.name, f, 'text/csv'),
-                "source": (None, f.name.split('/')[-1]),
-                "name": (None, self.training_ds_name)
+                "file": (f.name, f, 'text/csv')
             }
             res = requests.put(url, files=data)
             res.raise_for_status()
@@ -231,7 +228,7 @@ class StreamLearningController(BaseController):
 
     def _learn_model(self):
         msg = {"action": "training", "predictor": self.predictor,
-                "status": "", "details": ""}
+               "status": "", "details": ""}
 
         try:
             if self._is_predictor_exist():
@@ -241,8 +238,9 @@ class StreamLearningController(BaseController):
                 predictor_name = self.predictor
 
             df = self._collect_training_data()
-            self._upload_ds(df)
-            self.learning_params['data_source_name'] = self.training_ds_name
+            self._upload_file(df)
+            self.learning_params['integration'] = 'files'
+            self.learning_params['query'] = f'select * from {self.training_ds_name}'
             if 'kwargs' not in self.learning_params:
                 self.learning_params['kwargs'] = {}
             self.learning_params['kwargs']['join_learn_process'] = True
