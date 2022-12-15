@@ -21,6 +21,7 @@ class BaseController:
             self.mindsdb_url = f"http://{config['api']['http']['host']}:{config['api']['http']['port']}"
         except (ImportError, KeyError):
             self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://127.0.0.1:47334"
+            # self.mindsdb_url = os.getenv("MINDSDB_URL") or "http://172.17.0.1:47334"
         self.company_id = os.environ.get('MINDSDB_COMPANY_ID') or os.getenv('COMPANY_ID') or None
         log.info("%s: environment variables: MINDSDB_URL=%s\tCOMPANY_ID=%s",
                  self.name, self.mindsdb_url, self.company_id)
@@ -28,36 +29,43 @@ class BaseController:
         if self.company_id is not None:
             self.headers['company-id'] = self.company_id
         self.mindsdb_api_root = self.mindsdb_url + "/api"
-        self.predictors_url = "{}/predictors/".format(self.mindsdb_api_root)
-        self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
-        self.predictor_url = self.predictors_url + self.predictor
+        self.query_url = "{}/api/sql/query".format(self.mindsdb_url)
+        self.context = {"db": "mindsdb"}
+        self.target = None
 
         self.stop_event = Event()
 
     def _is_predictor_exist(self):
         max_attempt = 3
         cur_attempt = 0
+        query = f"select predict from mindsdb.predictors where name = '{self.predictor}'"
         while cur_attempt < max_attempt:
             try:
-                res = requests.get(self.predictor_url, headers=self.headers)
+                res = requests.post(
+                        self.query_url,
+                        json={"query":query, "context":self.context},
+                        headers=self.headers
+                    )
                 if res.status_code == requests.status_codes.codes.ok:
-                    return True
+                    if res.json()["data"]:
+                        self.target = res.json()["data"][0]
+                        return True
             except Exception as e:
                 log.debug("%s: error getting predictor(%s) info - %s", self.name, self.predictor, e)
             cur_attempt += 1
             time.sleep(1)
+        log.error("%s: unable to get predictor '%s'", self.name, self.predictor)
         return False
 
 
 class StreamController(BaseController):
     def __init__(self, name, predictor, stream_in, stream_out, stream_anomaly=None, in_thread=False):
         super().__init__(name, predictor, stream_in, stream_out)
+        print(f"StreamController: in_thread={in_thread}")
         self.stream_anomaly = stream_anomaly
         log.info("%s: creating controller params: predictor=%s, stream_in=%s, stream_out=%s, stream_anomaly=%s",
                  self.name, self.predictor, self.stream_in, self.stream_out, self.stream_anomaly)
-        self.predictors_url = "{}/api/predictors/".format(self.mindsdb_url)
-        self.predict_url = "{}{}/predict".format(self.predictors_url, self.predictor)
-        self.predictor_url = self.predictors_url + self.predictor
+        print("%s: creating controller params: predictor=%s, stream_in=%s, stream_out=%s, stream_anomaly=%s" % (self.name, self.predictor, self.stream_in, self.stream_out, self.stream_anomaly))
         if not self._is_predictor_exist():
             log.error("%s: unable to get prediction - predictor %s doesn't exists", self.name, self.predictor)
         self.ts_settings = self._get_ts_settings()
@@ -77,11 +85,15 @@ class StreamController(BaseController):
         while not self.stop_event.wait(0.5):
             for data in self.stream_in.read():
                 log.debug("%s: received input data - %s", self.name, data)
+                print("%s: received input data - %s" % (self.name, data))
+                prediction = None
                 try:
                     prediction = self._predict(data)
                     log.debug("%s: get predictions for %s - %s", self.name, data, prediction)
+                    print("%s: get predictions for %s - %s" % (self.name, data, prediction))
                 except Exception as e:
                     log.error("%s: prediction error - %s", self.name, e)
+                    print("%s: prediction error - %s" % (self.name, e))
                 try:
 
                     prediction = prediction if isinstance(prediction, list) else [prediction, ]
@@ -92,6 +104,7 @@ class StreamController(BaseController):
                             self.stream_out.write(item)
                 except Exception as e:
                     log.error("%s: writing error - %s", self.name, e)
+                    print("%s: writing error - %s" % (self.name, e))
 
     @staticmethod
     def _is_anomaly(res):
@@ -163,7 +176,34 @@ class StreamController(BaseController):
                                 self.stream_out.write(res_list[-1])
                             cache[gb_value] = cache[gb_value][1:]
 
+    def _get_condition(self, when_data):
+        data = list(f"{k}={v}" for k,v in when_data.items())
+        log.debug("%s._predict: making list from %s - %s", self.__class__.__name__, when_data, data)
+        where = "AND ".join(data)
+        log.debug("%s._predict: join by AND - %s", self.__class__.__name__, where)
+        where = "WHERE " + where[4:]
+        log.debug("%s._predict: final condition - %s", self.__class__.__name__, where)
+        return where
+
+    def _to_dict(self, prediction):
+        columns = prediction.get("column_names")
+        data = prediction.get("data")
+        if data:
+            data = data[0]
+        res = dict((k, v) for k, v in zip(columns, data))
+        log.debug("%s._to_dict: converting prediction - %s to - %s", self.__class__.__name__, prediction, res)
+        return res
+
     def _predict(self, when_data):
+        where = self._get_condition(when_data)
+        query = f"SELECT {self.target}, {self.target}_explain FROM mindsdb.{self.predictor} {where}"
+        log.debug("%s._predict: final query - %s", query)
+        res = requests.post(self.query_url, json={"query": query, "context": self.context}, headers=self.headers)
+        if res.status_code != requests.status_codes.codes.ok:
+            raise Exception(f"unable to get prediction for {when_data}: {res.text}")
+        return self._to_dict(res.json())
+
+    def _old_predict(self, when_data):
         params = {"when": when_data, 'format_flag': 'dict'}
         res = requests.post(self.predict_url, json=params, headers=self.headers)
         if res.status_code != requests.status_codes.codes.ok:
